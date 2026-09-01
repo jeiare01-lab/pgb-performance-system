@@ -1,0 +1,236 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { AlertCircle, TrendingUp, Users, Target, Clock, CheckCircle } from 'lucide-react';
+
+export default function Dashboard({ userRole }) {
+  const [stats, setStats] = useState({
+    totalEmployees: 0,
+    appraisalsSubmitted: 0,
+    appraisalsPending: 0,
+    activePIPs: 0,
+    pipEscalations: 0,
+    promotionEligible: 0,
+    kpiOnTrack: 0,
+    kpiAtRisk: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  async function loadDashboard() {
+    try {
+      // Load stats
+      const { count: employeeCount } = await supabase
+        .from('employees')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
+
+      const { data: appraisals } = await supabase
+        .from('appraisals')
+        .select('status');
+
+      const submitted = appraisals?.filter(a => a.status === 'signed').length || 0;
+      const pending = appraisals?.filter(a => a.status !== 'signed').length || 0;
+
+      const { data: pips } = await supabase
+        .from('pips')
+        .select('current_sanction')
+        .eq('status', 'active');
+
+      const escalated = pips?.filter(p => ['Final Warning', 'Pre-termination', 'Termination'].includes(p.current_sanction)).length || 0;
+
+      const { data: promotions } = await supabase
+        .from('promotion_records')
+        .select('*')
+        .eq('eligibility_status', 'eligible');
+
+      const { data: kpiData } = await supabase
+        .from('kpi_tracking')
+        .select('progress_percent')
+        .gte('tracking_date', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+      const onTrack = kpiData?.filter(k => k.progress_percent >= 80).length || 0;
+      const atRisk = kpiData?.filter(k => k.progress_percent < 60).length || 0;
+
+      setStats({
+        totalEmployees: employeeCount || 0,
+        appraisalsSubmitted: submitted,
+        appraisalsPending: pending,
+        activePIPs: pips?.length || 0,
+        pipEscalations: escalated,
+        promotionEligible: promotions?.length || 0,
+        kpiOnTrack: onTrack,
+        kpiAtRisk: atRisk,
+      });
+
+      // Load alerts
+      const alertsList = [];
+      if (escalated > 0) {
+        alertsList.push({
+          type: 'danger',
+          icon: AlertCircle,
+          title: `${escalated} PIPs at Critical Stage`,
+          desc: 'Final Warning or Pre-termination stage',
+        });
+      }
+      if (pending > 0) {
+        alertsList.push({
+          type: 'warning',
+          icon: Clock,
+          title: `${pending} Appraisals Pending`,
+          desc: 'Awaiting supervisor or HR review',
+        });
+      }
+      if (atRisk > 0) {
+        alertsList.push({
+          type: 'warning',
+          icon: TrendingUp,
+          title: `${atRisk} KPIs at Risk`,
+          desc: 'Progress below 60% of target',
+        });
+      }
+      setAlerts(alertsList);
+
+      // Load recent activity
+      const { data: recentAppraisals } = await supabase
+        .from('appraisals')
+        .select('id, employee_id, updated_at, status')
+        .order('updated_at', { ascending: false })
+        .limit(5);
+
+      setRecentActivity(recentAppraisals || []);
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) return <div className="text-slate-500">Loading dashboard...</div>;
+
+  const StatCard = ({ icon: Icon, label, value, subtext, trend }) => (
+    <div className="bg-white rounded-lg border border-slate-200 p-6 hover:shadow-md transition-shadow">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-600">{label}</p>
+          <p className="text-3xl font-bold text-slate-900 mt-2">{value}</p>
+          {subtext && <p className="text-xs text-slate-500 mt-1">{subtext}</p>}
+        </div>
+        <div className="p-2 bg-blue-50 rounded">
+          <Icon size={20} className="text-blue-600" />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-8">
+      {/* Alerts */}
+      {alerts.length > 0 && (
+        <div className="space-y-3">
+          {alerts.map((alert, idx) => {
+            const Icon = alert.icon;
+            const bgColor = alert.type === 'danger' ? 'bg-red-50' : 'bg-yellow-50';
+            const borderColor = alert.type === 'danger' ? 'border-red-200' : 'border-yellow-200';
+            const textColor = alert.type === 'danger' ? 'text-red-900' : 'text-yellow-900';
+            const iconColor = alert.type === 'danger' ? 'text-red-600' : 'text-yellow-600';
+            return (
+              <div key={idx} className={`${bgColor} border ${borderColor} rounded-lg p-4 flex gap-3`}>
+                <Icon size={18} className={iconColor} />
+                <div>
+                  <p className={`font-medium ${textColor}`}>{alert.title}</p>
+                  <p className={`text-sm ${textColor} opacity-75`}>{alert.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Key Metrics */}
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Performance Snapshot</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={Users} label="Active Employees" value={stats.totalEmployees} />
+          <StatCard icon={CheckCircle} label="Appraisals Submitted" value={stats.appraisalsSubmitted} subtext={`${stats.appraisalsPending} pending`} />
+          <StatCard icon={AlertCircle} label="Active PIPs" value={stats.activePIPs} subtext={`${stats.pipEscalations} escalated`} />
+          <StatCard icon={TrendingUp} label="Promotion Eligible" value={stats.promotionEligible} />
+          <StatCard icon={Target} label="KPIs On Track" value={stats.kpiOnTrack} subtext={`${stats.kpiAtRisk} at risk`} />
+        </div>
+      </div>
+
+      {/* By Role */}
+      {userRole === 'executive' && (
+        <div className="bg-white rounded-lg border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-900 mb-4">Executive Summary</h3>
+          <div className="space-y-2 text-sm">
+            <p><span className="text-slate-600">Appraisal Completion Rate:</span> <span className="font-medium">{stats.totalEmployees > 0 ? Math.round((stats.appraisalsSubmitted / (stats.appraisalsSubmitted + stats.appraisalsPending)) * 100) : 0}%</span></p>
+            <p><span className="text-slate-600">PIP Success Indicator:</span> <span className="font-medium">{stats.activePIPs > 0 ? Math.round(((stats.activePIPs - stats.pipEscalations) / stats.activePIPs) * 100) : 100}% in early stages</span></p>
+            <p><span className="text-slate-600">Succession Pipeline Health:</span> <span className="font-medium">Requires review by James</span></p>
+          </div>
+        </div>
+      )}
+
+      {userRole === 'hr' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg border border-slate-200 p-6">
+            <h3 className="font-semibold text-slate-900 mb-4">PIP Status by Stage</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Week 2 (Written Warning)</span>
+                <span className="font-medium">0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Week 4 (Final Warning)</span>
+                <span className="font-medium">0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Week 6 (Pre-termination)</span>
+                <span className="font-medium">0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Week 8+ (At Termination)</span>
+                <span className="font-medium">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 p-6">
+            <h3 className="font-semibold text-slate-900 mb-4">Appraisal Submissions by SBU</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Construction & Manufacturing</span>
+                <span className="font-medium">0 / 0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Real Estate</span>
+                <span className="font-medium">0 / 0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Maritime</span>
+                <span className="font-medium">0 / 0</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Human Capital Development</span>
+                <span className="font-medium">0 / 0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {userRole === 'supervisor' && (
+        <div className="bg-white rounded-lg border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-900 mb-4">Your Team</h3>
+          <div className="space-y-2 text-sm">
+            <p className="text-slate-600">Your direct reports and their appraisal/KPI status will appear here once loaded.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

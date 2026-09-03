@@ -16,14 +16,13 @@ export default function Dashboard() {
       setLoading(true);
       setError('');
       
-      // Explicit column selection - avoids wildcard issues
       const { data, error: fetchError } = await supabase
         .from('employees')
-        .select('id, employee_id, first_name, last_name, email, company_id, role, job_grade, department, performance_rating')
+        .select('employee_id, first_name, last_name, email, company_id, role, job_grade, department, performance_rating')
         .order('first_name', { ascending: true });
 
       if (fetchError) {
-        setError(`Error: ${fetchError.message}`);
+        setError(`${fetchError.message}`);
         console.error('Fetch error:', fetchError);
         return;
       }
@@ -35,7 +34,7 @@ export default function Dashboard() {
 
       setEmployees(data);
     } catch (err) {
-      setError(`Exception: ${err.message}`);
+      setError(`${err.message}`);
       console.error('Catch error:', err);
     } finally {
       setLoading(false);
@@ -107,7 +106,7 @@ export default function Dashboard() {
                 </div>
 
                 {filteredEmployees.map((emp) => (
-                  <div key={emp.id} style={styles.tableRow}>
+                  <div key={emp.employee_id} style={styles.tableRow}>
                     <div style={{ flex: 1.2 }}>
                       {emp.first_name} {emp.last_name}
                     </div>

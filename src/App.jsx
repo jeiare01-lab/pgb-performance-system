@@ -6,103 +6,182 @@ import KPITracker from './components/KPITracker';
 import PIPManagement from './components/PIPManagement';
 import PromotionEligibility from './components/PromotionEligibility';
 import IDPPlanning from './components/IDPPlanning';
-import { BarChart3, FileText, AlertCircle, TrendingUp, Users, Target } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState('supervisor'); // supervisor, hr, executive
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
-    checkUser();
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user || null);
+      } catch (error) {
+        console.error('Auth error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => subscription?.unsubscribe();
   }, []);
 
-  async function checkUser() {
+  if (loading) {
+    return <div style={{ color: '#666', padding: '16px' }}>Loading...</div>;
+  }
+
+  if (!user) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f5f5f5' }}>
+        <div style={{ background: 'white', padding: '32px', borderRadius: '4px', border: '1px solid #ddd', maxWidth: '400px', width: '100%' }}>
+          <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '24px', textAlign: 'center' }}>
+            PGB Performance Management System
+          </h1>
+
+          <AuthComponent onAuth={() => setUser(true)} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
+      {/* Header */}
+      <div style={{ background: '#333', color: 'white', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>PGB Performance Management System</h1>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            setUser(null);
+          }}
+          style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '14px' }}
+        >
+          Sign Out
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ background: 'white', borderBottom: '2px solid #ddd' }}>
+        <div style={{ display: 'flex', maxWidth: '1200px', margin: '0 auto' }}>
+          {[
+            { id: 'dashboard', label: 'Dashboard' },
+            { id: 'appraisal', label: 'Appraisal Form' },
+            { id: 'kpi', label: 'KPI Tracker' },
+            { id: 'pip', label: 'PIP Management' },
+            { id: 'promotion', label: 'Promotion Eligibility' },
+            { id: 'idp', label: 'Succession Planning' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                flex: 1,
+                padding: '16px',
+                border: 'none',
+                background: activeTab === tab.id ? '#007bff' : 'transparent',
+                color: activeTab === tab.id ? 'white' : '#333',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: activeTab === tab.id ? '600' : '400',
+                transition: 'all 0.2s',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ maxWidth: '1200px', margin: '0 auto', background: '#f5f5f5', minHeight: 'calc(100vh - 120px)' }}>
+        {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'appraisal' && <AppraisalForm />}
+        {activeTab === 'kpi' && <KPITracker />}
+        {activeTab === 'pip' && <PIPManagement />}
+        {activeTab === 'promotion' && <PromotionEligibility />}
+        {activeTab === 'idp' && <IDPPlanning />}
+      </div>
+    </div>
+  );
+}
+
+function AuthComponent({ onAuth }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
     try {
-      const { data } = await supabase.auth.getUser();
-      setUser(data?.user);
-      if (data?.user) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('user_id', data.user.id)
-          .single();
-        setUserRole(profile?.role || 'supervisor');
+      const { error } = isSignUp
+        ? await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        alert(error.message);
+      } else {
+        onAuth();
       }
     } catch (err) {
-      console.error('Auth check failed:', err);
+      alert('Auth error: ' + err.message);
     } finally {
       setLoading(false);
     }
-  }
-
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen bg-slate-50"><div className="text-slate-600">Loading...</div></div>;
-  }
-
-  const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: BarChart3, roles: ['supervisor', 'hr', 'executive'] },
-    { id: 'appraisal', label: 'Appraisal', icon: FileText, roles: ['supervisor', 'hr'] },
-    { id: 'kpi-tracker', label: 'KPI Tracking', icon: Target, roles: ['supervisor', 'hr', 'executive'] },
-    { id: 'pip', label: 'Performance Improvement', icon: AlertCircle, roles: ['supervisor', 'hr', 'executive'] },
-    { id: 'promotion', label: 'Promotion Eligibility', icon: TrendingUp, roles: ['hr', 'executive'] },
-    { id: 'idp', label: 'IDP & Succession', icon: Users, roles: ['hr', 'executive'] },
-  ];
-
-  const visibleTabs = tabs.filter(t => t.roles.includes(userRole));
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">Performance Management System</h1>
-              <p className="text-sm text-slate-500 mt-1">PGB · Shared Services · HR Division</p>
-            </div>
-            {user && (
-              <div className="text-right">
-                <p className="text-sm font-medium text-slate-900">{user.email}</p>
-                <p className="text-xs text-slate-500 capitalize mt-1">{userRole}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+    <form onSubmit={handleAuth}>
+      <div style={{ marginBottom: '16px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+          required
+        />
+      </div>
 
-      <nav className="bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex space-x-1 overflow-x-auto">
-            {visibleTabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon size={16} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
+      <div style={{ marginBottom: '24px' }}>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          style={{ width: '100%', padding: '10px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
+          required
+        />
+      </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {activeTab === 'dashboard' && <Dashboard userRole={userRole} />}
-        {activeTab === 'appraisal' && <AppraisalForm userRole={userRole} />}
-        {activeTab === 'kpi-tracker' && <KPITracker userRole={userRole} />}
-        {activeTab === 'pip' && <PIPManagement userRole={userRole} />}
-        {activeTab === 'promotion' && <PromotionEligibility userRole={userRole} />}
-        {activeTab === 'idp' && <IDPPlanning userRole={userRole} />}
-      </main>
-    </div>
+      <button
+        type="submit"
+        disabled={loading}
+        style={{ width: '100%', padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: '600', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}
+      >
+        {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+      </button>
+
+      <div style={{ textAlign: 'center', marginTop: '16px' }}>
+        <button
+          type="button"
+          onClick={() => setIsSignUp(!isSignUp)}
+          style={{ background: 'none', border: 'none', color: '#007bff', cursor: 'pointer', fontSize: '14px' }}
+        >
+          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+        </button>
+      </div>
+    </form>
   );
 }

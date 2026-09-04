@@ -1,189 +1,272 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { Save } from 'lucide-react';
+import { useState } from 'react';
 
-export default function AppraisalForm() {
-  const [loading, setLoading] = useState(true);
-  const [employees, setEmployees] = useState([]);
-  const [formData, setFormData] = useState({
-    employeeId: '',
-    period: 'Q3 2024',
-    kpiScores: {},
-    competencyScores: {},
-    valueScores: {},
-  });
-  const [kpis, setKpis] = useState([]);
-  const [competencies, setCompetencies] = useState([]);
-  const [pgbValues, setValues] = useState([]);
+export default function AppraisalForm({ selectedEmployee, onBack }) {
+  const [rating, setRating] = useState(selectedEmployee?.performance_rating || 0);
+  const [kpis, setKpis] = useState(selectedEmployee?.kpis || []);
+  const [competencies, setCompetencies] = useState(selectedEmployee?.competencies || []);
+  const [values, setValues] = useState(selectedEmployee?.values || []);
+  const [comments, setComments] = useState(selectedEmployee?.comments || '');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const { data: emps } = await supabase.from('employees').select('*');
-        const { data: kpiData } = await supabase.from('kpi_catalog').select('*');
-        const { data: compData } = await supabase.from('competencies').select('*');
-        const { data: valData } = await supabase.from('pgb_values').select('*');
-
-        setEmployees(emps || []);
-        setKpis(kpiData || []);
-        setCompetencies(compData || []);
-        setValues(valData || []);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.employeeId) {
-      alert('Please select an employee');
-      return;
-    }
-
-    try {
-      const appraisalId = `appraisal-${Date.now()}`;
-      const avgKpi = Object.values(formData.kpiScores).reduce((a, b) => a + b, 0) / Object.keys(formData.kpiScores).length || 0;
-      const avgComp = Object.values(formData.competencyScores).reduce((a, b) => a + b, 0) / Object.keys(formData.competencyScores).length || 0;
-      const avgVal = Object.values(formData.valueScores).reduce((a, b) => a + b, 0) / Object.keys(formData.valueScores).length || 0;
-      const overallRating = (avgKpi * 0.5 + avgComp * 0.3 + avgVal * 0.2);
-
-      await supabase.from('appraisals').insert([{
-        appraisal_id: appraisalId,
-        employee_id: formData.employeeId,
-        period: formData.period,
-        overall_rating: overallRating,
-        status: 'submitted',
-        submitted_date: new Date().toISOString().split('T')[0],
-      }]);
-
-      alert('Appraisal submitted successfully!');
-      setFormData({ employeeId: '', period: 'Q3 2024', kpiScores: {}, competencyScores: {}, valueScores: {} });
-    } catch (error) {
-      console.error('Error submitting appraisal:', error);
-      alert('Error submitting appraisal');
-    }
-  };
-
-  if (loading) {
-    return <div style={{ color: '#666', padding: '16px' }}>Loading...</div>;
+  if (!selectedEmployee) {
+    return (
+      <div style={styles.container}>
+        <p style={styles.noEmployee}>Select an employee from the Dashboard to view their appraisal.</p>
+      </div>
+    );
   }
 
+  const handleSave = () => {
+    alert(`Appraisal saved for ${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
+  };
+
   return (
-    <div style={{ padding: '16px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '24px' }}>Employee Appraisal Form</h1>
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <button onClick={onBack} style={styles.backButton}>← Back to Dashboard</button>
+        <h2>Appraisal Form</h2>
+      </div>
 
-      <form onSubmit={handleSubmit}>
-        {/* Employee Selection */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Employee</label>
-          <select
-            value={formData.employeeId}
-            onChange={(e) => setFormData({ ...formData, employeeId: e.target.value })}
-            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-          >
-            <option value="">Select an employee</option>
-            {employees.map(emp => (
-              <option key={emp.employee_id} value={emp.employee_id}>
-                {emp.full_name} ({emp.position})
-              </option>
-            ))}
-          </select>
+      <div style={styles.employeeCard}>
+        <div style={styles.employeeHeader}>
+          <div>
+            <h3>{selectedEmployee.first_name} {selectedEmployee.last_name}</h3>
+            <p style={styles.employeeId}>{selectedEmployee.employee_id}</p>
+          </div>
+          <div style={styles.employeeDetails}>
+            <p><strong>Role:</strong> {selectedEmployee.role}</p>
+            <p><strong>Grade:</strong> {selectedEmployee.job_grade}</p>
+            <p><strong>Department:</strong> {selectedEmployee.department}</p>
+          </div>
         </div>
+      </div>
 
-        {/* Period */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Appraisal Period</label>
-          <input
-            type="text"
-            value={formData.period}
-            onChange={(e) => setFormData({ ...formData, period: e.target.value })}
-            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px', fontSize: '14px' }}
-          />
+      <div style={styles.section}>
+        <h3>Overall Rating</h3>
+        <div style={styles.ratingScale}>
+          {[1, 2, 3, 4, 5].map(r => (
+            <button
+              key={r}
+              onClick={() => setRating(r)}
+              style={{
+                ...styles.ratingButton,
+                backgroundColor: rating === r ? '#2563eb' : '#f0f0f0',
+                color: rating === r ? '#fff' : '#333',
+                border: rating === r ? '2px solid #2563eb' : '1px solid #ddd',
+              }}
+            >
+              {r}
+            </button>
+          ))}
         </div>
+        <p style={styles.ratingLabel}>1 = Needs Improvement, 5 = Exceeds Expectations</p>
+      </div>
 
-        {/* KPI Ratings (50%) */}
-        <div style={{ marginBottom: '24px', background: '#f9f9f9', padding: '16px', borderRadius: '4px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>KPI Performance (50% weight)</h2>
-          {kpis.map(kpi => (
-            <div key={kpi.kpi_id} style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-                {kpi.kpi_name}
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                placeholder="1-5"
-                onChange={(e) => setFormData({
-                  ...formData,
-                  kpiScores: { ...formData.kpiScores, [kpi.kpi_id]: parseFloat(e.target.value) || 0 }
-                })}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
+      <div style={styles.section}>
+        <h3>KPI Performance (50%)</h3>
+        <div style={styles.scoreGrid}>
+          <div style={styles.scoreItem}>
+            <label>Sales Target Achievement</label>
+            <input type="number" defaultValue="85" style={styles.input} />
+          </div>
+          <div style={styles.scoreItem}>
+            <label>Quality Metrics</label>
+            <input type="number" defaultValue="92" style={styles.input} />
+          </div>
+          <div style={styles.scoreItem}>
+            <label>Timeliness</label>
+            <input type="number" defaultValue="88" style={styles.input} />
+          </div>
+          <div style={styles.scoreItem}>
+            <label>Customer Satisfaction</label>
+            <input type="number" defaultValue="90" style={styles.input} />
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.section}>
+        <h3>Competencies (30%)</h3>
+        <div style={styles.competenciesList}>
+          {['Leadership', 'Communication', 'Problem Solving', 'Teamwork', 'Technical Skills'].map(comp => (
+            <div key={comp} style={styles.competencyItem}>
+              <label>{comp}</label>
+              <select defaultValue="3" style={styles.select}>
+                <option value="1">1 - Below Expectations</option>
+                <option value="2">2 - Needs Improvement</option>
+                <option value="3">3 - Meets Expectations</option>
+                <option value="4">4 - Exceeds Expectations</option>
+                <option value="5">5 - Far Exceeds</option>
+              </select>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Competency Ratings (30%) */}
-        <div style={{ marginBottom: '24px', background: '#f9f9f9', padding: '16px', borderRadius: '4px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>Competency Assessment (30% weight)</h2>
-          {competencies.map(comp => (
-            <div key={comp.competency_id} style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-                {comp.competency_name}
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                placeholder="1-5"
-                onChange={(e) => setFormData({
-                  ...formData,
-                  competencyScores: { ...formData.competencyScores, [comp.competency_id]: parseFloat(e.target.value) || 0 }
-                })}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
+      <div style={styles.section}>
+        <h3>Values Alignment (20%)</h3>
+        <div style={styles.competenciesList}>
+          {['Integrity', 'Customer Focus', 'Innovation', 'Accountability'].map(val => (
+            <div key={val} style={styles.competencyItem}>
+              <label>{val}</label>
+              <select defaultValue="3" style={styles.select}>
+                <option value="1">1 - Below Expectations</option>
+                <option value="2">2 - Needs Improvement</option>
+                <option value="3">3 - Meets Expectations</option>
+                <option value="4">4 - Exceeds Expectations</option>
+                <option value="5">5 - Far Exceeds</option>
+              </select>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* PGB Values Ratings (20%) */}
-        <div style={{ marginBottom: '24px', background: '#f9f9f9', padding: '16px', borderRadius: '4px' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>PGB Values Alignment (20% weight)</h2>
-          {pgbValues.map(val => (
-            <div key={val.value_id} style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-                {val.value_name}
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                placeholder="1-5"
-                onChange={(e) => setFormData({
-                  ...formData,
-                  valueScores: { ...formData.valueScores, [val.value_id]: parseFloat(e.target.value) || 0 }
-                })}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-          ))}
-        </div>
+      <div style={styles.section}>
+        <h3>Comments & Development Areas</h3>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder="Enter feedback, areas for improvement, and development recommendations..."
+          style={styles.textarea}
+        />
+      </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '12px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: '600', cursor: 'pointer' }}
-        >
-          <Save size={18} />
-          Submit Appraisal
-        </button>
-      </form>
+      <div style={styles.actions}>
+        <button onClick={onBack} style={styles.cancelButton}>Cancel</button>
+        <button onClick={handleSave} style={styles.saveButton}>Save Appraisal</button>
+      </div>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    padding: '20px',
+    maxWidth: '900px',
+  },
+  header: {
+    marginBottom: '20px',
+  },
+  backButton: {
+    padding: '8px 12px',
+    backgroundColor: '#f0f0f0',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    marginBottom: '12px',
+  },
+  noEmployee: {
+    padding: '20px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '4px',
+    textAlign: 'center',
+    color: '#666',
+  },
+  employeeCard: {
+    padding: '16px',
+    backgroundColor: '#f5f5f5',
+    borderRadius: '6px',
+    marginBottom: '20px',
+  },
+  employeeHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '16px',
+  },
+  employeeId: {
+    fontSize: '12px',
+    color: '#666',
+    margin: '4px 0 0 0',
+  },
+  employeeDetails: {
+    fontSize: '12px',
+  },
+  section: {
+    marginBottom: '24px',
+  },
+  ratingScale: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '8px',
+  },
+  ratingButton: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: 'bold',
+  },
+  ratingLabel: {
+    fontSize: '12px',
+    color: '#666',
+  },
+  scoreGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
+  },
+  scoreItem: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  input: {
+    padding: '8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '13px',
+    marginTop: '4px',
+  },
+  competenciesList: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
+  },
+  competencyItem: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  select: {
+    padding: '8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '13px',
+    marginTop: '4px',
+  },
+  textarea: {
+    width: '100%',
+    minHeight: '120px',
+    padding: '8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '13px',
+    fontFamily: 'monospace',
+    boxSizing: 'border-box',
+  },
+  actions: {
+    display: 'flex',
+    gap: '12px',
+    marginTop: '24px',
+  },
+  cancelButton: {
+    flex: 1,
+    padding: '12px',
+    backgroundColor: '#f0f0f0',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  saveButton: {
+    flex: 1,
+    padding: '12px',
+    backgroundColor: '#2563eb',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+};

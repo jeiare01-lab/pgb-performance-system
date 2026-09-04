@@ -1,14 +1,15 @@
 import { useState, Suspense, lazy } from 'react';
 
-// Lazy load components with error boundaries
-const Dashboard = lazy(() => import('./components/Dashboard').catch(() => ({ default: () => <div>Dashboard failed to load</div> })));
-const AppraisalForm = lazy(() => import('./components/AppraisalForm').catch(() => ({ default: () => <div>Appraisal Form failed to load</div> })));
-const KPITracker = lazy(() => import('./components/KPITracker').catch(() => ({ default: () => <div>KPI Tracker failed to load</div> })));
-const PIPManagement = lazy(() => import('./components/PIPManagement').catch(() => ({ default: () => <div>PIP Management failed to load</div> })));
-const PromotionEligibility = lazy(() => import('./components/PromotionEligibility').catch(() => ({ default: () => <div>Promotion Eligibility failed to load</div> })));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const AppraisalForm = lazy(() => import('./components/AppraisalForm'));
+const KPITracker = lazy(() => import('./components/KPITracker'));
+const PIPManagement = lazy(() => import('./components/PIPManagement'));
+const PromotionEligibility = lazy(() => import('./components/PromotionEligibility'));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [dashboardFilter, setDashboardFilter] = useState('all'); // all, high-performers, pending
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', component: Dashboard },
@@ -18,7 +19,37 @@ export default function App() {
     { id: 'promotion', label: 'Promotion Eligibility', component: PromotionEligibility },
   ];
 
+  const handleEmployeeSelect = (employee) => {
+    setSelectedEmployee(employee);
+    setActiveTab('appraisal');
+  };
+
+  const handleStatClick = (filterType) => {
+    setDashboardFilter(filterType);
+    // Stay on dashboard, just change the filter
+  };
+
   const ActiveComponent = tabs.find(t => t.id === activeTab)?.component;
+
+  const componentProps = {
+    Dashboard: {
+      selectedEmployee,
+      onEmployeeSelect: handleEmployeeSelect,
+      onStatClick: handleStatClick,
+      filter: dashboardFilter,
+      setFilter: setDashboardFilter,
+    },
+    AppraisalForm: {
+      selectedEmployee,
+      onBack: () => setActiveTab('dashboard'),
+    },
+  };
+
+  const getProps = () => {
+    if (activeTab === 'dashboard') return componentProps.Dashboard;
+    if (activeTab === 'appraisal') return componentProps.AppraisalForm;
+    return {};
+  };
 
   return (
     <div style={styles.app}>
@@ -31,7 +62,10 @@ export default function App() {
         {tabs.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id === 'dashboard') setDashboardFilter('all');
+            }}
             style={{
               ...styles.navButton,
               backgroundColor: activeTab === tab.id ? '#2563eb' : 'transparent',
@@ -45,7 +79,7 @@ export default function App() {
 
       <main style={styles.main}>
         <Suspense fallback={<div style={{ padding: '20px' }}>Loading...</div>}>
-          {ActiveComponent && <ActiveComponent />}
+          {ActiveComponent && <ActiveComponent {...getProps()} />}
         </Suspense>
       </main>
     </div>

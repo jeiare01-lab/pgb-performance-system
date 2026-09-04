@@ -18,8 +18,8 @@ export default function Dashboard({ selectedEmployee, onEmployeeSelect, filter =
 
       const { data, error: err } = await supabase
         .from('employees')
-        .select('employee_id, first_name, last_name, role, job_grade, department, performance_rating')
-        .order('first_name');
+        .select('employee_id, first_name, last_name, email, company_id, role, job_grade, department, performance_rating')
+        .order('first_name', { ascending: true });
 
       if (err) {
         setError(`Query error: ${err.message}`);
@@ -112,7 +112,7 @@ export default function Dashboard({ selectedEmployee, onEmployeeSelect, filter =
           <div style={styles.filterBar}>
             <input
               type="text"
-              placeholder="Search by name, ID, or role..."
+              placeholder="Search by name, IDNO, or role..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               style={styles.search}
@@ -135,12 +135,12 @@ export default function Dashboard({ selectedEmployee, onEmployeeSelect, filter =
           ) : (
             <div style={styles.table}>
               <div style={styles.header}>
-                <div style={{ flex: 1.2 }}>Name</div>
-                <div style={{ flex: 0.8 }}>ID</div>
-                <div style={{ flex: 1.2 }}>Department</div>
-                <div style={{ flex: 1.5 }}>Role</div>
-                <div style={{ flex: 0.6 }}>Grade</div>
-                <div style={{ flex: 0.6 }}>Rating</div>
+                <div style={{ flex: 1.5 }}>NAME</div>
+                <div style={{ flex: 0.9 }}>IDNO</div>
+                <div style={{ flex: 1.2 }}>BUSINESS UNIT</div>
+                <div style={{ flex: 1.5 }}>ROLE</div>
+                <div style={{ flex: 0.7 }}>JOB GRADE</div>
+                <div style={{ flex: 0.9 }}>OVERALL RATING</div>
               </div>
               {filtered.map((emp, idx) => (
                 <div
@@ -152,10 +152,10 @@ export default function Dashboard({ selectedEmployee, onEmployeeSelect, filter =
                     cursor: 'pointer',
                   }}
                 >
-                  <div style={{ flex: 1.2, fontWeight: '500', color: '#2563eb' }}>
-                    {emp.first_name} {emp.last_name}
+                  <div style={{ flex: 1.5, fontWeight: '500', color: '#2563eb' }}>
+                    {emp.last_name}, {emp.first_name}
                   </div>
-                  <div style={{ flex: 0.8, fontSize: '12px', color: '#666' }}>
+                  <div style={{ flex: 0.9, fontSize: '12px', color: '#666' }}>
                     {emp.employee_id}
                   </div>
                   <div style={{ flex: 1.2, fontSize: '12px' }}>
@@ -164,8 +164,8 @@ export default function Dashboard({ selectedEmployee, onEmployeeSelect, filter =
                   <div style={{ flex: 1.5, fontSize: '12px' }}>
                     {emp.role}
                   </div>
-                  <div style={{ flex: 0.6 }}>{emp.job_grade}</div>
-                  <div style={{ flex: 0.6 }}>
+                  <div style={{ flex: 0.7, textAlign: 'center' }}>{emp.job_grade}</div>
+                  <div style={{ flex: 0.9 }}>
                     {emp.performance_rating ? (
                       <span style={{
                         backgroundColor: emp.performance_rating >= 4 ? '#4CAF50' : emp.performance_rating >= 3 ? '#2196F3' : '#FF9800',

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 const KPI_INDICATORS = [
   { label: 'Stronger Cash Position', desc: 'Collections, liquidity, working-capital targets.' },
@@ -33,6 +34,7 @@ export default function AppraisalForm({ selectedEmployee, onBack }) {
   const [evaluationPeriod, setEvaluationPeriod] = useState('');
   const [immediateSupervisor, setImmediateSupervisor] = useState('');
   const [reviewer, setReviewer] = useState('');
+  const [saving, setSaving] = useState(false);
 
   if (!selectedEmployee) {
     return (
@@ -56,8 +58,37 @@ export default function AppraisalForm({ selectedEmployee, onBack }) {
     ? ((parseFloat(kpiAvg) * 0.5) + (parseFloat(competencyAvg) * 0.3) + (parseFloat(valueAvg) * 0.2)).toFixed(2)
     : '—';
 
-  const handleSave = () => {
-    alert(`Appraisal saved for ${selectedEmployee.first_name} ${selectedEmployee.last_name}`);
+  const handleSave = async () => {
+    try {
+      // Validate that all sections have ratings
+      if (total === '—') {
+        alert('Please rate all sections (KPIs, Competencies, and Values) before saving.');
+        return;
+      }
+
+      setSaving(true);
+      const overallScore = parseFloat(total);
+
+      // Update employee's performance_rating in Supabase
+      const { error } = await supabase
+        .from('employees')
+        .update({ performance_rating: overallScore })
+        .eq('employee_id', selectedEmployee.employee_id);
+
+      setSaving(false);
+
+      if (error) {
+        alert(`Error saving: ${error.message}`);
+        return;
+      }
+
+      alert(`✓ Appraisal saved successfully!\nOverall Rating: ${overallScore}/5.00\n\nThe Dashboard will now reflect this rating.`);
+      // Optionally go back to dashboard after saving
+      // onBack();
+    } catch (e) {
+      setSaving(false);
+      alert(`Error: ${e.message}`);
+    }
   };
 
   return (
@@ -352,7 +383,17 @@ export default function AppraisalForm({ selectedEmployee, onBack }) {
       {/* Actions */}
       <div style={styles.actions}>
         <button onClick={onBack} style={styles.cancelButton}>Cancel</button>
-        <button onClick={handleSave} style={styles.saveButton}>Save Appraisal</button>
+        <button 
+          onClick={handleSave} 
+          disabled={saving}
+          style={{
+            ...styles.saveButton,
+            opacity: saving ? 0.6 : 1,
+            cursor: saving ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {saving ? 'Saving...' : 'Save Appraisal'}
+        </button>
       </div>
     </div>
   );
